@@ -6,3 +6,4 @@ id,user_id,order_date,status,amount_cents
 105,2,2026-03-15,shipped,3100
 106,1,2026-03-20,completed,5000
 107,4,2026-04-02,completed,1200
+108,5,2026-04-10,returned,1500
