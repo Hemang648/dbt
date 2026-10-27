@@ -1,0 +1,34 @@
+
+target/
+dbt_packages/
+logs/
+.env
+# ---- dbt generated ----
+target/
+dbt_packages/
+logs/
+dbt_internal_packages/
+
+# ---- DuckDB database files ----
+*.duckdb
+*.duckdb.wal
+*.db
+
+# ---- Credentials / local config ----
+profiles.yml
+.env
+*.env
+
+# ---- Python ----
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,8 @@
+id,user_id,order_date,status,amount_cents
+101,1,2026-01-05,completed,2500
+102,1,2026-02-10,returned,1800
+103,2,2026-02-11,completed,4200
+104,3,2026-03-01,placed,900
+105,2,2026-03-15,shipped,3100
+106,1,2026-03-20,completed,5000
+107,4,2026-04-02,completed,1200
