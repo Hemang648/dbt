@@ -1,8 +1,0 @@
-version: 2
-
-sources:
-  - name: raw              # source name, used in source('raw', ...)
-    schema: raw            # actual schema in the database
-    tables:                # " - " this hyphen indicates a list of objects
-      - name: customers
-      - name: orders
