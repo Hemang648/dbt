@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: raw                # source name, used in source('raw', ...)      
+    schema: raw              # actual schema in the database                 
+    tables:                  # " - " this hyphen indicates a list of objects
+      - name: customers
+        description: Raw customer data loaded from CSV.
+        columns:
+          - name: id
+            data_tests:
+              - unique
+              - not_null
+
+      - name: orders
+        description: Raw order data loaded from CSV.
+        loaded_at_field: "cast(order_date as timestamp)"
+        freshness:
+          warn_after: {count: 30, period: day}
+          error_after: {count: 365, period: day}
+        columns:
+          - name: id
+            data_tests:
+              - unique
+              - not_null

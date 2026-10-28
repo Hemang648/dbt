@@ -1,0 +1,5 @@
+status,status_label
+placed,Order Placed
+shipped,In Transit
+completed,Delivered
+returned,Returned
