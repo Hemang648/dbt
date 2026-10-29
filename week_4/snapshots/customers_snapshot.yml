@@ -1,0 +1,9 @@
+snapshots:
+  - name: customers_snapshot
+    relation: source('raw', 'customers')
+    config:
+      schema: snapshots
+      unique_key: id
+      strategy: check
+      # snapshots/customers_snapshot.yml
+      check_cols: [FirstName, LastName, email]

@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: fct_orders
+    description: One row per order, enriched with customer details.
+    columns:
+      - name: order_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Customer who placed the order.
+        data_tests:
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id

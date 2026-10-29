@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  
+  - name: stg_customers
+    description: One row per customer, cleaned from raw.customers.
+    columns:
+      - name: customer_id
+        description: Primary key of the customer.
+        data_tests:
+          - unique
+          - not_null
+      - name: email
+        description: Customer email address.
+        data_tests:
+          - not_null
+
+  - name: stg_orders
+    description: One row per order, cleaned from raw.orders.
+    columns:
+      - name: order_id
+        description: Primary key of the order.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Foreign key to stg_customers.
+        data_tests:
+          - not_null
+          
+          - relationships: {arguments: {      ## To get rid of the deprecation warning
+              to: ref('stg_customers'),
+              field: customer_id
+              }}
+
+      - name: status
+        description: "{{ doc('order_status') }}"
+        
+      - name: status
+        description: Current order status.
+        data_tests:
+          - accepted_values: {arguments: {values: ['placed', 'shipped', 'completed', 'returned']}, config: {severity: warn}}  ## To get rid of the deprecation warning
+              
+
+      - name: amount
+        description: Order value in currency units (cents divided by 100).
+        data_tests:
+          - dbt_utils.accepted_range: {arguments: {min_value: 0} }     ## To get rid of the deprecation warning
