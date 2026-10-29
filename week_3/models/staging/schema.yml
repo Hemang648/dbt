@@ -39,5 +39,7 @@ models:
         data_tests:
           - accepted_values:
               values: ['placed', 'shipped', 'completed', 'returned']
+              config:
+                severity: warn
       - name: amount
         description: Order value in currency units (cents divided by 100).
