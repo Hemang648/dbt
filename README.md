@@ -1,4 +1,4 @@
-# dbt Core Learning Journey (DuckDB)
+# dbt-Core Learning Journey (DuckDB)
 
 A hands-on, 4-week roadmap to learn **dbt Core** using **DuckDB** as the warehouse (no cloud account or server needed). Each week has its own folder, so the repo shows how the project grew.
 
