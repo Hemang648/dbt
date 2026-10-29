@@ -4,10 +4,10 @@ A hands-on, 4-week roadmap to learn **dbt Core** using **DuckDB** as the warehou
 
 | Week | Topic | Folder | Status |
 |---|---|---|---|
-| 1 | Setup, `profiles.yml`, project structure, models, `ref()` | `week_2/` (foundation) | Done |
-| 2 | Sources, seeds, staging, marts, Jinja | `week_2/` | Done |
+| 1 | Setup, `profiles.yml`, project structure, models, `ref()` | `week_1_and_2/` (foundation) | Done |
+| 2 | Sources, seeds, staging, marts, Jinja | `week_1_and_2/` | Done |
 | 3 | Tests, source freshness, documentation | `week_3/` | Done |
-| 4 | Incremental, snapshots, macros, packages, capstone | `week_4/` | Upcoming |
+| 4 | Incremental, snapshots, macros, packages, environments | `week_4/` | Done |
 
 ---
 
@@ -45,29 +45,55 @@ dbt_learning/
 │   └── seeds/
 │       └── status_labels.csv
 │
-└── week_3/                          # Week 2 project + tests, freshness, docs
-    ├── dbt_project.yml
-    ├── load_raw.py
+├── week_3/                          # Week 2 project + tests, freshness, docs
+│   ├── dbt_project.yml
+│   ├── load_raw.py
+│   ├── inspect_db.py
+│   ├── data/
+│   ├── models/
+│   │   ├── docs.md                  # reusable doc blocks
+│   │   ├── staging/
+│   │   │   ├── sources.yml          # + source tests and freshness
+│   │   │   ├── schema.yml           # + generic tests and descriptions
+│   │   │   ├── stg_customers.sql
+│   │   │   └── stg_orders.sql
+│   │   └── marts/
+│   │       ├── schema.yml           # + mart tests and descriptions
+│   │       ├── fct_orders.sql
+│   │       └── customer_order_counts.sql
+│   ├── seeds/
+│   │   └── status_labels.csv
+│   └── tests/
+│       └── assert_amount_not_negative.sql   # singular test
+│
+└── week_4/                          # Week 3 project + incremental, snapshots, macros, packages
+    ├── dbt_project.yml              # + tags
+    ├── packages.yml                 # dbt_utils (restored with dbt deps)
+    ├── load_raw.py                  # now accepts a database name
     ├── inspect_db.py
     ├── data/
+    ├── macros/
+    │   └── cents_to_dollars.sql     # reusable macro
     ├── models/
-    │   ├── docs.md                  # reusable doc blocks
+    │   ├── docs.md
     │   ├── staging/
-    │   │   ├── sources.yml          # + source tests and freshness
-    │   │   ├── schema.yml           # + generic tests and descriptions
+    │   │   ├── sources.yml
+    │   │   ├── schema.yml           # + dbt_utils.accepted_range test
     │   │   ├── stg_customers.sql
-    │   │   └── stg_orders.sql
+    │   │   └── stg_orders.sql       # uses cents_to_dollars()
     │   └── marts/
-    │       ├── schema.yml           # + mart tests and descriptions
-    │       ├── fct_orders.sql
+    │       ├── schema.yml
+    │       ├── fct_orders.sql       # now incremental, with surrogate key
     │       └── customer_order_counts.sql
     ├── seeds/
     │   └── status_labels.csv
+    ├── snapshots/
+    │   └── customers_snapshot.yml   # SCD Type 2 history
     └── tests/
-        └── assert_amount_not_negative.sql   # singular test
+        └── assert_amount_not_negative.sql
 ```
 
-Not committed (see `.gitignore`): `target/`, `logs/`, `*.duckdb`, `.venv/`, `profiles.yml`.
+Not committed (see `.gitignore`): `target/`, `logs/`, `dbt_packages/`, `*.duckdb`, `.venv/`, `profiles.yml`.
 
 ---
 
@@ -359,12 +385,199 @@ Adding a duplicate order id, an orphan customer id, an unknown status and a nega
 
 ---
 
-## Week 4: Intermediate skills and capstone (upcoming)
-- Incremental models
-- Snapshots (SCD Type 2)
-- Macros and packages (`dbt_utils`)
-- Environments (dev vs prod) and node selection
-- Capstone project with a public dataset
+## Week 4: Incremental models, snapshots, macros, packages and environments
+
+**Theory**
+| Concept | What it is | Why it matters |
+|---|---|---|
+| **Incremental model** | A table that processes only new or changed rows on each run | Saves time and cost on large data |
+| **Snapshot** | Records how a row changes over time (SCD Type 2) | Keeps history that raw data overwrites |
+| **Macro** | A reusable Jinja function | Removes copy-pasted SQL |
+| **Package** | A shared dbt project (macros, tests, models) | Reuses community code like `dbt_utils` |
+| **Target / environment** | dev vs prod connection and settings | Safe development before production |
+
+**Setup for this week**
+```bash
+# from dbt_learning/
+cp -r week_3 week_4          # Windows: xcopy week_3 week_4 /E /I
+cd week_4
+# delete the copied target/ folder and dev.duckdb, then:
+python load_raw.py
+dbt deps                     # installs packages from packages.yml
+dbt build
+```
+
+**`load_raw.py` (accepts an optional database name)**
+```python
+import sys
+import duckdb
+
+db = sys.argv[1] if len(sys.argv) > 1 else 'dev.duckdb'
+con = duckdb.connect(db)
+con.sql("create schema if not exists raw")
+con.sql("create or replace table raw.customers as select * from read_csv_auto('data/customers.csv')")
+con.sql("create or replace table raw.orders as select * from read_csv_auto('data/orders.csv')")
+print(f"Loaded raw data into {db}")
+print(con.sql("select count(*) as orders from raw.orders"))
+con.close()
+```
+```bash
+python load_raw.py                 # loads dev.duckdb
+python load_raw.py prod.duckdb     # loads prod.duckdb (needed before --target prod)
+```
+
+**Macro (`macros/cents_to_dollars.sql`)**
+```sql
+{% macro cents_to_dollars(column_name, scale=2) %}
+    round({{ column_name }} / 100.0, {{ scale }})
+{% endmacro %}
+```
+```sql
+-- used in stg_orders.sql
+{{ cents_to_dollars('amount_cents') }} as amount
+```
+Compiles to `round(amount_cents / 100.0, 2)`. Check it with `dbt compile --select stg_orders`.
+
+**Package (`packages.yml`)**
+```yaml
+packages:
+  - package: dbt-labs/dbt_utils
+    version: [">=1.1.0", "<2.0.0"]
+```
+```bash
+dbt deps
+```
+```sql
+-- surrogate key in fct_orders
+{{ dbt_utils.generate_surrogate_key(['orders.order_id', 'orders.customer_id']) }} as order_key,
+```
+```yaml
+# package test in models/staging/schema.yml
+- name: amount
+  data_tests:
+    - dbt_utils.accepted_range:
+        min_value: 0
+```
+If dbt warns about test arguments, use the one-line form: `- dbt_utils.accepted_range: {arguments: {min_value: 0}}`.
+
+**Incremental model (`models/marts/fct_orders.sql`)**
+```sql
+{{
+    config(
+        materialized='incremental',
+        unique_key='order_id'
+    )
+}}
+
+with orders as (
+    select * from {{ ref('stg_orders') }}
+
+    {% if is_incremental() %}
+    where order_date >= (select max(order_date) from {{ this }})
+    {% endif %}
+),
+
+customers as (
+    select * from {{ ref('stg_customers') }}
+)
+
+select
+    {{ dbt_utils.generate_surrogate_key(['orders.order_id', 'orders.customer_id']) }} as order_key,
+    orders.order_id,
+    orders.order_date,
+    orders.status,
+    orders.amount,
+    customers.customer_id,
+    customers.full_name,
+    customers.email
+from orders
+left join customers
+    on orders.customer_id = customers.customer_id
+```
+
+| Piece | Meaning |
+|---|---|
+| `materialized='incremental'` | First run builds the full table, later runs process only new rows |
+| `is_incremental()` | True only when the table exists and `--full-refresh` was not used |
+| `{{ this }}` | The model's own existing table |
+| `unique_key` | Matching rows are updated instead of duplicated |
+| `>=` filter | Reprocesses the latest date so same-day late arrivals are not missed |
+
+**Incremental pitfalls**
+- **Late-arriving data:** rows with an old date that arrive later are missed. Use a lookback window or filter on a load timestamp.
+- **Changed old rows:** a date filter misses updates to old rows. An `updated_at` column is the correct filter.
+- **Logic changes** only apply to new rows. Rebuild with `--full-refresh`.
+- Always set a `unique_key` unless the data is append-only.
+
+**Snapshot (`snapshots/customers_snapshot.yml`)**
+```yaml
+snapshots:
+  - name: customers_snapshot
+    relation: source('raw', 'customers')
+    config:
+      schema: snapshots
+      unique_key: id
+      strategy: check
+      check_cols: [first_name, last_name, email]
+```
+This is the YAML style for dbt 1.9 and later. Older versions use a `{% snapshot %}` Jinja block with `target_schema`.
+
+```bash
+dbt snapshot                 # take a snapshot
+# change a customer in data/customers.csv, then:
+python load_raw.py
+dbt snapshot                 # a new row is added for the changed customer
+```
+
+| Column | Meaning |
+|---|---|
+| `dbt_valid_from` | When this version became active |
+| `dbt_valid_to` | When it was replaced (`NULL` means current) |
+
+- **`check` strategy:** compares the listed columns. **`timestamp` strategy:** uses an `updated_at` column (cheaper, preferred when reliable).
+- Snapshots only capture changes that exist when they run, so run them regularly.
+
+**Environments (dev vs prod)**
+```bash
+python load_raw.py prod.duckdb
+dbt build --target prod      # builds into prod.duckdb
+dbt build                    # builds into dev.duckdb (default target)
+```
+```sql
+{% if target.name == 'dev' %}
+limit 100
+{% endif %}
+```
+Common pattern: dev builds a small sample for speed, prod builds everything.
+
+**Tags and node selection (`dbt_project.yml`)**
+```yaml
+models:
+  my_first_project:
+    staging:
+      +materialized: view
+      +tags: ['staging']
+    marts:
+      +materialized: table
+      +tags: ['marts', 'daily']
+```
+```bash
+dbt build --select tag:daily                 # everything tagged daily
+dbt build --select staging                   # a folder
+dbt build --select +fct_orders               # model and all upstream
+dbt build --select stg_orders+               # model and all downstream
+dbt build --select fct_orders --exclude tag:staging
+dbt ls --select +fct_orders                  # list what would run, without running
+```
+For CI, `dbt build --select state:modified+` runs only changed models and their downstream, using a saved `manifest.json` (`--state path/`).
+
+**Project conventions**
+- Prefixes: `stg_` (staging), `int_` (intermediate), `fct_` (facts), `dim_` (dimensions).
+- One source table per staging model, no joins in staging.
+- Import CTEs at the top, final `select` at the bottom.
+- Every model has a primary key with `unique` and `not_null` tests.
+
+**Next: capstone project** on a public dataset (for example Olist e-commerce) with sources, staging, intermediate models, a fact and a dimension, tests on all keys, an incremental model, a snapshot, generated docs and a clean README.
 
 ---
 
@@ -382,6 +595,10 @@ Adding a duplicate order id, an orphan customer id, an unknown status and a nega
 | `dbt docs generate` / `dbt docs serve` | Build and view documentation |
 | `--select model+` / `+model` | Downstream / upstream selection |
 | `--target prod` | Use another environment |
+| `dbt deps` | Install packages from `packages.yml` |
+| `dbt snapshot` | Capture row history (SCD Type 2) |
+| `--full-refresh` | Rebuild an incremental model from scratch |
+| `dbt ls --select ...` | List matching nodes without running |
 
 ---
 
@@ -397,3 +614,8 @@ Adding a duplicate order id, an orphan customer id, an unknown status and a nega
 | Test not running | YAML indentation, or model name differs from the `.sql` file |
 | YAML error | Tabs used instead of spaces |
 | Docs port in use | Use `dbt docs serve --port 8081` |
+| `dbt_utils` not found | `dbt deps` not run, or `packages.yml` not in the project root |
+| Duplicates in incremental table | Missing or wrong `unique_key` |
+| Old rows keep old logic | Run with `--full-refresh` |
+| Prod build fails, raw tables missing | Run `python load_raw.py prod.duckdb` first |
+| Snapshot schema not found | Run `show all tables`, since it may be `main_snapshots` |
